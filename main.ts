@@ -42,42 +42,59 @@ export default class DynamicBackgroundPlugin extends Plugin {
         const file = this.app.workspace.getActiveFile();
         if (!file) return;
 
-        const modal = new BackgroundImageModal(this.app, async (url: string) => {
-            // Читаем текущее содержимое файла
-            const content = await this.app.vault.read(file);
+const modal = new BackgroundImageModal(this.app, async (url: string) => {
+    const file = this.app.workspace.getActiveFile();
+    if (!file) return;
 
-            if (content.startsWith('---')) {
-                // Frontmatter уже есть
-                const endIndex = content.indexOf('---', 3);
-                if (endIndex !== -1) {
-                    const frontmatter = content.substring(3, endIndex);
-                    const rest = content.substring(endIndex + 3);
+    const content = await this.app.vault.read(file);
 
-                    let newFrontmatter: string;
+    // Если пустая строка — убираем фон
+    if (url === '') {
+        if (content.startsWith('---')) {
+            const endIndex = content.indexOf('---', 3);
+            if (endIndex !== -1) {
+                const frontmatter = content.substring(3, endIndex);
+                const rest = content.substring(endIndex + 3);
 
-                    if (frontmatter.includes('dynamic-background-image:')) {
-                        // Заменяем существующую строку
-                        newFrontmatter = frontmatter.replace(
-                            /dynamic-background-image:.*(\n|$)/,
-                            `dynamic-background-image: ${url}\n`
-                        );
-                    } else {
-                        // Добавляем новую строку
-                        newFrontmatter = frontmatter + `dynamic-background-image: ${url}\n`;
-                    }
+                let newFrontmatter = frontmatter
+                    .replace(/dynamic-background-image:.*(\n|$)/, '')
+                    .replace(/dynamic-background:.*(\n|$)/, '');
 
-                    await this.app.vault.modify(file, `---${newFrontmatter}---${rest}`);
-                }
-            } else {
-                // Frontmatter нет — создаём с нуля
-                await this.app.vault.modify(file,
-                    `---\ndynamic-background: true\ndynamic-background-image: ${url}\n---\n\n${content}`
+                await this.app.vault.modify(file, `---${newFrontmatter}---${rest}`);
+            }
+        }
+        this.hideBackground();
+        return;
+    }
+
+    // Иначе — устанавливаем картинку как раньше
+    if (content.startsWith('---')) {
+        const endIndex = content.indexOf('---', 3);
+        if (endIndex !== -1) {
+            const frontmatter = content.substring(3, endIndex);
+            const rest = content.substring(endIndex + 3);
+
+            let newFrontmatter: string;
+
+            if (frontmatter.includes('dynamic-background-image:')) {
+                newFrontmatter = frontmatter.replace(
+                    /dynamic-background-image:.*(\n|$)/,
+                    `dynamic-background-image: ${url}\n`
                 );
+            } else {
+                newFrontmatter = frontmatter + `dynamic-background-image: ${url}\n`;
             }
 
-            // Сразу применяем
-            this.updateBackgroundForActiveLeaf();
-        });
+            await this.app.vault.modify(file, `---${newFrontmatter}---${rest}`);
+        }
+    } else {
+        await this.app.vault.modify(file,
+            `---\ndynamic-background: true\ndynamic-background-image: ${url}\n---\n\n${content}`
+        );
+    }
+
+    this.updateBackgroundForActiveLeaf();
+});
 
         modal.open();
     }
@@ -407,13 +424,11 @@ class BackgroundImageModal extends Modal {
 
         const btn = contentEl.createEl('button', { text: 'Apply' });
         btn.style.width = '100%';
-        btn.onclick = () => {
-            const url = this.inputEl.value.trim();
-            if (url) {
-                this.close();
-                this.onSubmit(url);
-            }
-        };
+btn.onclick = () => {
+    const url = this.inputEl.value.trim();
+    this.close();
+    this.onSubmit(url); // убрали проверку if (url)
+};
 
         // Enter тоже подтверждает
         this.inputEl.addEventListener('keydown', (e) => {
