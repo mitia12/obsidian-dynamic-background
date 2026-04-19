@@ -124,9 +124,16 @@ setBackgroundImage(imagePath: string) {
     if (!this.dynamicBackgroundContainer) return;
 
     let imageUrl = "";
-    try {
-        imageUrl = this.app.vault.adapter.getResourcePath(imagePath);
-    } catch(e) {}
+
+    // Если это внешняя ссылка — используем напрямую
+    if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
+        imageUrl = imagePath;
+    } else {
+        // Локальный файл из vault
+        try {
+            imageUrl = this.app.vault.adapter.getResourcePath(imagePath);
+        } catch(e) {}
+    }
 
     if (imageUrl) {
         this.dynamicBackgroundContainer.style.setProperty("background", `url("${imageUrl}")`);
