@@ -115,9 +115,13 @@ updateBackgroundForActiveLeaf() {
             // Иначе используем глобальную из настроек
             this.SetDynamicBackgroundContainerBgProperty();
         }
-    } else {
-        this.hideBackground();
-    }
+} else {
+    this.hideBackground();
+    // Сбрасываем картинку при скрытии
+    this.wallpaperCover.style.removeProperty("background");
+    this.wallpaperCover.style.removeProperty("background-size");
+    this.wallpaperCover.style.removeProperty("background-position");
+}
 }
 
 setBackgroundImage(imagePath: string) {
@@ -125,20 +129,24 @@ setBackgroundImage(imagePath: string) {
 
     let imageUrl = "";
 
-    // Если это внешняя ссылка — используем напрямую
     if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
         imageUrl = imagePath;
     } else {
-        // Локальный файл из vault
         try {
             imageUrl = this.app.vault.adapter.getResourcePath(imagePath);
         } catch(e) {}
     }
 
     if (imageUrl) {
-        this.dynamicBackgroundContainer.style.setProperty("background", `url("${imageUrl}")`);
-        this.dynamicBackgroundContainer.style.setProperty("background-size", "cover");
-        this.dynamicBackgroundContainer.style.setProperty("background-position", "center");
+        // Ставим на wallpaperCover, а не на контейнер
+        // Так эффект (canvas) рисуется поверх картинки
+        this.wallpaperCover.style.setProperty("background", `url("${imageUrl}")`);
+        this.wallpaperCover.style.setProperty("background-size", "cover");
+        this.wallpaperCover.style.setProperty("background-position", "center");
+    } else {
+        this.wallpaperCover.style.removeProperty("background");
+        this.wallpaperCover.style.removeProperty("background-size");
+        this.wallpaperCover.style.removeProperty("background-position");
     }
 }
 
