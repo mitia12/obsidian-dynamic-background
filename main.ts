@@ -47,6 +47,12 @@ export default class DynamicBackgroundPlugin extends Plugin {
 			}
 		});
 
+		this.registerEvent(
+    this.app.workspace.on('active-leaf-change', (leaf) => {
+        this.updateBackgroundForActiveLeaf(leaf);
+    })
+);
+
 		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
 		//this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
