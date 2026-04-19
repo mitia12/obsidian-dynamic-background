@@ -90,6 +90,42 @@ export default class DynamicBackgroundPlugin extends Plugin {
 		this.wallpaperCover.style.setProperty("filter",value);
 	}
 
+	updateBackgroundForActiveLeaf(leaf: any) {
+    if (!this.dynamicBackgroundContainer) return;
+
+    // Получаем текущий файл
+    const file = this.app.workspace.getActiveFile();
+    
+    if (!file) {
+        // Нет файла — показываем фон
+        this.showBackground();
+        return;
+    }
+
+    // Читаем frontmatter
+    const cache = this.app.metadataCache.getFileCache(file);
+    const frontmatter = cache?.frontmatter;
+
+    // Если в frontmatter есть "dynamic-background: false" — скрываем
+    if (frontmatter && frontmatter['dynamic-background'] === false) {
+        this.hideBackground();
+    } else {
+        this.showBackground();
+    }
+}
+
+hideBackground() {
+    if (this.dynamicBackgroundContainer) {
+        this.dynamicBackgroundContainer.style.setProperty('display', 'none');
+    }
+}
+
+showBackground() {
+    if (this.dynamicBackgroundContainer) {
+        this.dynamicBackgroundContainer.style.removeProperty('display');
+    }
+}
+
 	RemoveDynamicBackgroundContainer(){
 		if (this.dynamicBackgroundContainer)
 		{
