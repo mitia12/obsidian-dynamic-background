@@ -1,4 +1,5 @@
-import { App, Modal, Plugin, PluginSettingTab, Setting, FileSystemAdapter, normalizePath } from 'obsidian';
+import { App, Modal, Plugin, PluginSettingTab, Setting, FileSystemAdapter, normalizePath, TFile } from 'obsidian';
+
 import { Add_StarSky, Remove_StarSky} from 'effects/dark-dynamic-star-sky';
 import { Add_Snow, Remove_Snow, DarkTheme_Snow_Background_Property} from 'effects/dark-dynamic-snow';
 import { Add_Rain, Remove_Rain, DarkTheme_Rain_Background_Property} from 'effects/dark-dynamic-rain';
@@ -17,7 +18,7 @@ const DEFAULT_SETTINGS: DynamicBackgroundPluginSettings = {
 	enableDynamicEffect: true,
 	backgroundImageFile:"",
 	blur:0
-} 
+}
 
 export default class DynamicBackgroundPlugin extends Plugin {
 	settings: DynamicBackgroundPluginSettings;
@@ -25,41 +26,49 @@ export default class DynamicBackgroundPlugin extends Plugin {
 	preBackgroudImageFile: boolean;
 	dynamicBackgroundContainer: HTMLDivElement|null;
 	wallpaperCover: HTMLDivElement;
-	
+
 	async onload() {
 		console.log("loading dynamic background plugin...");
 
 		this.preDynamicEffect = DynamicEffectEnum.Unknown;
-		
-
 		await this.loadSettings();
 
-		// This adds a settings tab so the user can configure various aspects of the plugin
 		this.addSettingTab(new DynamicBackgroundSettingTab(this.app, this));
 
 		this.app.workspace.onLayoutReady(() => {
 			this.AddDynamicBackgroundContainer();
-
 			this.SetDynamicBackgroundContainerBgProperty();
-
 			if(this.settings.enableDynamicEffect == true){
 				this.AddDynamicBackgroundEffect(this.settings.dynamicEffect);
 			}
+
+			// ─── PER-TAB BACKGROUND CONTROL ───────────────────────────────
+			// Check immediately for the already-open leaf on startup
+			this.updateBackgroundForActiveLeaf();
+
+			// Re-check whenever the user switches tabs
+			this.registerEvent(
+				this.app.workspace.on('active-leaf-change', () => {
+					this.updateBackgroundForActiveLeaf();
+				})
+			);
+
+			// Also re-check when frontmatter of the current file is changed
+			// (so the user can toggle without reopening the file)
+			this.registerEvent(
+				this.app.metadataCache.on('changed', (file: TFile) => {
+					const activeFile = this.app.workspace.getActiveFile();
+					if (activeFile && activeFile.path === file.path) {
+						this.updateBackgroundForActiveLeaf();
+					}
+				})
+			);
+			// ──────────────────────────────────────────────────────────────
 		});
-
-		this.registerEvent(
-    this.app.workspace.on('active-leaf-change', (leaf) => {
-        this.updateBackgroundForActiveLeaf(leaf);
-    })
-);
-
-		// When registering intervals, this function will automatically clear the interval when the plugin is disabled.
-		//this.registerInterval(window.setInterval(() => console.log('setInterval'), 5 * 60 * 1000));
 	}
 
 	onunload() {
 		console.log("unloading dynamic background plugin...");
-
 		this.RemoveDynamicBackgroundContainer();
 	}
 
@@ -71,60 +80,66 @@ export default class DynamicBackgroundPlugin extends Plugin {
 		await this.saveData(this.settings);
 	}
 
+	// ─── PER-TAB BACKGROUND CONTROL ─────────────────────────────────────────
+
+	/**
+	 * Reads the frontmatter of the currently active file.
+	 * Background is HIDDEN by default everywhere.
+	 * It is shown ONLY when the note explicitly contains:
+	 *
+	 *   ---
+	 *   dynamic-background: true
+	 *   ---
+	 */
+	updateBackgroundForActiveLeaf() {
+		if (!this.dynamicBackgroundContainer) return;
+
+		const file = this.app.workspace.getActiveFile();
+
+		if (!file) {
+			this.hideBackground();
+			return;
+		}
+
+		const cache = this.app.metadataCache.getFileCache(file);
+		const frontmatter = cache?.frontmatter;
+
+		// Show only when explicitly set to true
+		if (frontmatter && frontmatter['dynamic-background'] === true) {
+			this.showBackground();
+		} else {
+			this.hideBackground();
+		}
+	}
+
+	hideBackground() {
+		if (this.dynamicBackgroundContainer) {
+			this.dynamicBackgroundContainer.style.setProperty('display', 'none');
+		}
+	}
+
+	showBackground() {
+		if (this.dynamicBackgroundContainer) {
+			this.dynamicBackgroundContainer.style.removeProperty('display');
+		}
+	}
+
+	// ────────────────────────────────────────────────────────────────────────
+
 	AddDynamicBackgroundContainer(){
-  	let div_root = app.workspace.containerEl.find("div.workspace > div.mod-root");
-		
+		let div_root = app.workspace.containerEl.find("div.workspace > div.mod-root");
 		this.dynamicBackgroundContainer = null;
-
-  	if (div_root) {
-    	this.dynamicBackgroundContainer = div_root.createEl("div", { cls: "rh-obsidian-dynamic-background-container" });
-
+		if (div_root) {
+			this.dynamicBackgroundContainer = div_root.createEl("div", { cls: "rh-obsidian-dynamic-background-container" });
 			this.wallpaperCover = this.dynamicBackgroundContainer.createEl("div", { cls: "rh-wallpaper-cover" });
-
 			this.SetWallpaperBlur();
-  	}
+		}
 	}
 
 	SetWallpaperBlur(){
 		let value = "blur("+this.settings.blur.toString()+"px)";
 		this.wallpaperCover.style.setProperty("filter",value);
 	}
-
-	updateBackgroundForActiveLeaf(leaf: any) {
-    if (!this.dynamicBackgroundContainer) return;
-
-    // Получаем текущий файл
-    const file = this.app.workspace.getActiveFile();
-    
-    if (!file) {
-        // Нет файла — показываем фон
-        this.showBackground();
-        return;
-    }
-
-    // Читаем frontmatter
-    const cache = this.app.metadataCache.getFileCache(file);
-    const frontmatter = cache?.frontmatter;
-
-    // Если в frontmatter есть "dynamic-background: false" — скрываем
-    if (frontmatter && frontmatter['dynamic-background'] === false) {
-        this.hideBackground();
-    } else {
-        this.showBackground();
-    }
-}
-
-hideBackground() {
-    if (this.dynamicBackgroundContainer) {
-        this.dynamicBackgroundContainer.style.setProperty('display', 'none');
-    }
-}
-
-showBackground() {
-    if (this.dynamicBackgroundContainer) {
-        this.dynamicBackgroundContainer.style.removeProperty('display');
-    }
-}
 
 	RemoveDynamicBackgroundContainer(){
 		if (this.dynamicBackgroundContainer)
@@ -138,19 +153,16 @@ showBackground() {
 		if (this.dynamicBackgroundContainer == null)
 			return;
 
-		let backgroundImageAlreadySet = false;	
+		let backgroundImageAlreadySet = false;
 		let imageFullFilename="";
-
 		try {
-            imageFullFilename = this.app.vault.adapter.getResourcePath(this.settings.backgroundImageFile)
+			imageFullFilename = this.app.vault.adapter.getResourcePath(this.settings.backgroundImageFile)
+		} catch(e) { }
 
-        } catch(e) { }
-		
 		if (imageFullFilename!=""){
 			this.dynamicBackgroundContainer.style.setProperty("background","url(\"" + imageFullFilename + "\"");
 			this.dynamicBackgroundContainer.style.setProperty("background-size","cover");
 			this.dynamicBackgroundContainer.style.setProperty("background-position","center");
-
 			backgroundImageAlreadySet = true;
 		}
 		else{
@@ -223,7 +235,7 @@ showBackground() {
 					Add_RandomCircle(this.dynamicBackgroundContainer);
 				break;
 			case DynamicEffectEnum.Light_RandomCircle:
-				if (this.dynamicBackgroundContainer)	
+				if (this.dynamicBackgroundContainer)
 					Add_RandomCircle_Light(this.dynamicBackgroundContainer);
 				break;
 			case DynamicEffectEnum.Light_Wave:
@@ -231,7 +243,7 @@ showBackground() {
 					Add_Wave_Light(this.dynamicBackgroundContainer);
 				break;
 		}
-  };
+	};
 
 	RemoveDynamicBackgroundEffect(effect:DynamicEffectEnum){
 		if (effect == DynamicEffectEnum.Unknown)
@@ -268,7 +280,7 @@ showBackground() {
 					Remove_Wave_Light(this.dynamicBackgroundContainer);
 				break;
 		}
-  };
+	};
 }
 
 class DynamicBackgroundModal extends Modal {
@@ -306,7 +318,7 @@ class DynamicBackgroundSettingTab extends PluginSettingTab {
 			.setName('Dynamic Effect')
 			.setDesc('Select a dynamic effect')
 			.addDropdown((dropdown) =>
-        dropdown
+				dropdown
 					.addOption(DynamicEffectEnum.Dark_DigitalRain.toString(), "Dark - Matrix / Digital Rain")
 					.addOption(DynamicEffectEnum.Dark_Rain.toString(), "Dark - Rain")
 					.addOption(DynamicEffectEnum.Dark_RandomCircle.toString(), "Dark - Random Circle")
@@ -315,81 +327,71 @@ class DynamicBackgroundSettingTab extends PluginSettingTab {
 					.addOption(DynamicEffectEnum.Light_RandomCircle.toString(), "Light - Random Circle")
 					.addOption(DynamicEffectEnum.Light_Wave.toString(), "Light - Wave")
 					.setValue(this.plugin.settings.dynamicEffect.toString())
-          .onChange(async (value) => {
+					.onChange(async (value) => {
 						this.plugin.preDynamicEffect = this.plugin.settings.dynamicEffect;
-            this.plugin.settings.dynamicEffect = Number(value);
-            
+						this.plugin.settings.dynamicEffect = Number(value);
 						await this.plugin.saveSettings();
-
 						this.plugin.RemoveDynamicBackgroundEffect(this.plugin.preDynamicEffect);
-
 						if (this.plugin.settings.enableDynamicEffect == true)
 							this.plugin.AddDynamicBackgroundEffect(this.plugin.settings.dynamicEffect);
-
 						this.plugin.SetDynamicBackgroundContainerBgProperty();
-
 						this.display();
-          })
-      );	
+					})
+			);
 
 		if (this.plugin.settings.dynamicEffect == DynamicEffectEnum.Dark_DigitalRain)
 		{
 			new Setting(containerEl)
-			.setName("Brightness")
-			.setDesc("Set Digital Rain Brightness.")
-			.addSlider(tc => {
-				tc.setDynamicTooltip()
-					.setLimits(0.50, 1, 0.01)
-					.setValue(this.plugin.settings.digitalRainBrightness)
-					.onChange(async value => {
-						this.plugin.settings.digitalRainBrightness = value;
-						this.plugin.SetDigitalRainBrightnessHelper();
-
-						await this.plugin.saveSettings();
-					});
-			});	
+				.setName("Brightness")
+				.setDesc("Set Digital Rain Brightness.")
+				.addSlider(tc => {
+					tc.setDynamicTooltip()
+						.setLimits(0.50, 1, 0.01)
+						.setValue(this.plugin.settings.digitalRainBrightness)
+						.onChange(async value => {
+							this.plugin.settings.digitalRainBrightness = value;
+							this.plugin.SetDigitalRainBrightnessHelper();
+							await this.plugin.saveSettings();
+						});
+				});
 		}
 
 		new Setting(containerEl)
 			.setName('Enable Dynamic Effect')
 			.setDesc('Enable or disable dynamic effect')
-			.addToggle((tc) => 
+			.addToggle((tc) =>
 				tc.setValue(this.plugin.settings.enableDynamicEffect)
-				.onChange(async(value) => {
-					this.plugin.settings.enableDynamicEffect = value;
-					
-					await this.plugin.saveSettings();
+					.onChange(async(value) => {
+						this.plugin.settings.enableDynamicEffect = value;
+						await this.plugin.saveSettings();
+						if (this.plugin.settings.enableDynamicEffect == false){
+							this.plugin.RemoveDynamicBackgroundEffect(this.plugin.settings.dynamicEffect);
+						}
+						else{
+							this.plugin.AddDynamicBackgroundEffect(this.plugin.settings.dynamicEffect);
+						}
+					})
+			);
 
-					if (this.plugin.settings.enableDynamicEffect == false){
-						this.plugin.RemoveDynamicBackgroundEffect(this.plugin.settings.dynamicEffect);
-					}
-					else{
-						this.plugin.AddDynamicBackgroundEffect(this.plugin.settings.dynamicEffect);
-					}
-				})
-			);				
-
-			new Setting(containerEl)
+		new Setting(containerEl)
 			.setName('Static Wallpaper Image')
 			.setDesc("Image file in Vault. Please use the relative path of the image file inside Vault.")
 			.addTextArea((text) =>
-        text
+				text
 					.setValue(this.plugin.settings.backgroundImageFile)
-          .setPlaceholder("Example: attachments/moon.jpg or wallpapers/green.png" )
+					.setPlaceholder("Example: attachments/moon.jpg or wallpapers/green.png" )
 					.then((cb) => {
 						cb.inputEl.style.width = "100%";
 						cb.inputEl.rows = 5;
 					})
-          .onChange(async (value) => {
-            this.plugin.settings.backgroundImageFile = value;
-
+					.onChange(async (value) => {
+						this.plugin.settings.backgroundImageFile = value;
 						await this.plugin.saveSettings();
-
 						this.plugin.SetDynamicBackgroundContainerBgProperty();
 					})
-      );
+			);
 
-			new Setting(containerEl)
+		new Setting(containerEl)
 			.setName('Blur')
 			.setDesc('The blurriness of the wallpaper, 0 means no blur.')
 			.addSlider(tc => {
@@ -398,11 +400,9 @@ class DynamicBackgroundSettingTab extends PluginSettingTab {
 					.setValue(this.plugin.settings.blur)
 					.onChange(async value => {
 						this.plugin.settings.blur = value;
-
 						await this.plugin.saveSettings();
-
 						this.plugin.SetWallpaperBlur();
 					});
-			});	
+			});
 	}
 }
