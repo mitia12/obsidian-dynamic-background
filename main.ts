@@ -35,6 +35,54 @@ export default class DynamicBackgroundPlugin extends Plugin {
 
 		this.addSettingTab(new DynamicBackgroundSettingTab(this.app, this));
 
+		this.addCommand({
+    id: 'set-background-image',
+    name: 'Set background image for this note',
+    callback: () => {
+        const file = this.app.workspace.getActiveFile();
+        if (!file) return;
+
+        const modal = new BackgroundImageModal(this.app, async (url: string) => {
+            // Читаем текущее содержимое файла
+            const content = await this.app.vault.read(file);
+
+            if (content.startsWith('---')) {
+                // Frontmatter уже есть
+                const endIndex = content.indexOf('---', 3);
+                if (endIndex !== -1) {
+                    const frontmatter = content.substring(3, endIndex);
+                    const rest = content.substring(endIndex + 3);
+
+                    let newFrontmatter: string;
+
+                    if (frontmatter.includes('dynamic-background-image:')) {
+                        // Заменяем существующую строку
+                        newFrontmatter = frontmatter.replace(
+                            /dynamic-background-image:.*(\n|$)/,
+                            `dynamic-background-image: ${url}\n`
+                        );
+                    } else {
+                        // Добавляем новую строку
+                        newFrontmatter = frontmatter + `dynamic-background-image: ${url}\n`;
+                    }
+
+                    await this.app.vault.modify(file, `---${newFrontmatter}---${rest}`);
+                }
+            } else {
+                // Frontmatter нет — создаём с нуля
+                await this.app.vault.modify(file,
+                    `---\ndynamic-background: true\ndynamic-background-image: ${url}\n---\n\n${content}`
+                );
+            }
+
+            // Сразу применяем
+            this.updateBackgroundForActiveLeaf();
+        });
+
+        modal.open();
+    }
+});
+
 		this.app.workspace.onLayoutReady(() => {
 			this.AddDynamicBackgroundContainer();
 			this.SetDynamicBackgroundContainerBgProperty();
@@ -335,6 +383,49 @@ class DynamicBackgroundModal extends Modal {
 		const {contentEl} = this;
 		contentEl.empty();
 	}
+}
+
+class BackgroundImageModal extends Modal {
+    onSubmit: (url: string) => void;
+    inputEl: HTMLInputElement;
+
+    constructor(app: App, onSubmit: (url: string) => void) {
+        super(app);
+        this.onSubmit = onSubmit;
+    }
+
+    onOpen() {
+        const { contentEl } = this;
+        contentEl.createEl('h3', { text: 'Set background image' });
+
+        this.inputEl = contentEl.createEl('input', {
+            type: 'text',
+            placeholder: 'https://images.unsplash.com/... or attachments/bg.jpg',
+        });
+        this.inputEl.style.width = '100%';
+        this.inputEl.style.marginBottom = '12px';
+
+        const btn = contentEl.createEl('button', { text: 'Apply' });
+        btn.style.width = '100%';
+        btn.onclick = () => {
+            const url = this.inputEl.value.trim();
+            if (url) {
+                this.close();
+                this.onSubmit(url);
+            }
+        };
+
+        // Enter тоже подтверждает
+        this.inputEl.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') btn.click();
+        });
+
+        this.inputEl.focus();
+    }
+
+    onClose() {
+        this.contentEl.empty();
+    }
 }
 
 class DynamicBackgroundSettingTab extends PluginSettingTab {
