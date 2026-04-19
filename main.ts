@@ -91,26 +91,49 @@ export default class DynamicBackgroundPlugin extends Plugin {
 	 *   dynamic-background: true
 	 *   ---
 	 */
-	updateBackgroundForActiveLeaf() {
-		if (!this.dynamicBackgroundContainer) return;
+updateBackgroundForActiveLeaf() {
+    if (!this.dynamicBackgroundContainer) return;
 
-		const file = this.app.workspace.getActiveFile();
+    const file = this.app.workspace.getActiveFile();
 
-		if (!file) {
-			this.hideBackground();
-			return;
-		}
+    if (!file) {
+        this.hideBackground();
+        return;
+    }
 
-		const cache = this.app.metadataCache.getFileCache(file);
-		const frontmatter = cache?.frontmatter;
+    const cache = this.app.metadataCache.getFileCache(file);
+    const frontmatter = cache?.frontmatter;
 
-		// Show only when explicitly set to true
-		if (frontmatter && frontmatter['dynamic-background'] === true) {
-			this.showBackground();
-		} else {
-			this.hideBackground();
-		}
-	}
+    if (frontmatter && frontmatter['dynamic-background'] === true) {
+        this.showBackground();
+
+        // Если указана картинка для этой заметки — используем её
+        const perNoteImage = frontmatter['dynamic-background-image'];
+        if (perNoteImage) {
+            this.setBackgroundImage(perNoteImage);
+        } else {
+            // Иначе используем глобальную из настроек
+            this.SetDynamicBackgroundContainerBgProperty();
+        }
+    } else {
+        this.hideBackground();
+    }
+}
+
+setBackgroundImage(imagePath: string) {
+    if (!this.dynamicBackgroundContainer) return;
+
+    let imageUrl = "";
+    try {
+        imageUrl = this.app.vault.adapter.getResourcePath(imagePath);
+    } catch(e) {}
+
+    if (imageUrl) {
+        this.dynamicBackgroundContainer.style.setProperty("background", `url("${imageUrl}")`);
+        this.dynamicBackgroundContainer.style.setProperty("background-size", "cover");
+        this.dynamicBackgroundContainer.style.setProperty("background-position", "center");
+    }
+}
 
 	hideBackground() {
 		if (this.dynamicBackgroundContainer) {
