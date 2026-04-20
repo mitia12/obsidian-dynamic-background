@@ -1,3 +1,40 @@
+---------------------------------------------------------------
+
+
+
+
+
+
+
+
+
+
+# Клонируй свой репозиторий
+git clone https://github.com/mitia12/obsidian-dynamic-background
+cd obsidian-dynamic-background
+
+# Установи зависимости
+npm install
+
+npx esbuild main.ts --bundle --external:obsidian --format=cjs --outfile=main.js
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+------------------------------------------------------------------
+
 # Dynamic Background Plugin
 
 An [Obsidian](https://obsidian.md) plugin for adding dynamic effects and/or static wallpapers for Obsidian background.
